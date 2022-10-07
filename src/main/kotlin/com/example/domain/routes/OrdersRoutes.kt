@@ -195,12 +195,15 @@ fun Route.orders(){
             post("uploadImage"){
                 val multipartData = call.receiveMultipart()
                 var imageMetaInfo: ImageMetaInfo? = null
+                var orderId: Int? = null
 
                 multipartData.forEachPart { part ->
                     when(part){
                         is PartData.FormItem -> {
-                            imageMetaInfo = Json.decodeFromString<ImageMetaInfo>(ImageMetaInfo.serializer(), part.value)
-                            println("Got imageMetaInfo: $imageMetaInfo")
+                            //imageMetaInfo = Json.decodeFromString<ImageMetaInfo>(ImageMetaInfo.serializer(), part.value)
+                            println("Got part: ${part.value} of type ${part.value::class.java}")
+                            orderId = part.value.substring(1, part.value.length-1).toInt()
+                            println("Got orderId: $orderId")
                         }
                         is PartData.FileItem -> {
                             val fileBytes = part.streamProvider().readBytes()
@@ -225,7 +228,7 @@ fun Route.orders(){
 
                             val responseImage = imagesDao.insertImage(
                                 Image(
-                                    orderId = imageMetaInfo?.orderId ?: 0,
+                                    orderId = orderId ?: 0,
                                     name = fileName,
                                     uri = file.absolutePath
                                 )
@@ -238,19 +241,7 @@ fun Route.orders(){
                 }
             }
 
-            get("image/{name}"){
-                val imageName = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
 
-                val image = imagesDao.getImageByName(imageName) ?: return@get call.respond(HttpStatusCode.NotFound)
-                val file = File(image.uri)
-                if (file.exists()){
-                    call.respondFile(file)
-                }
-                else{
-                    call.respond(HttpStatusCode.NotFound, "Not exists")
-                }
-
-            }
 
             post("image/delete/{name}"){
                 val imageName = call.parameters["name"] ?: return@post call.respond(HttpStatusCode.BadRequest)
@@ -266,4 +257,20 @@ fun Route.orders(){
             }
         }
     }
+    route("orders"){
+        get("image/{name}"){
+            val imageName = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+
+            val image = imagesDao.getImageByName(imageName) ?: return@get call.respond(HttpStatusCode.NotFound)
+            val file = File(image.uri)
+            if (file.exists()){
+                call.respondFile(file)
+            }
+            else{
+                call.respond(HttpStatusCode.NotFound, "Not exists")
+            }
+
+        }
+    }
+
 }
