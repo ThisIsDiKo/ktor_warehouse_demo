@@ -1,5 +1,6 @@
 package com.example.domain.routes
 
+import com.example.data.dao.UsersDao
 import com.example.data.dao.imagesDao
 import com.example.data.dao.ordersDao
 import com.example.data.dao.usersDao
@@ -72,6 +73,7 @@ fun Route.orders(){
                 call.respond(HttpStatusCode.OK, ListOfOrders(orders=orders))
             }
 
+
 //            get("user/{id}"){
 //                val userId = call.parameters["id"]?.toInt() ?: return@get call.respond(HttpStatusCode.BadRequest)
 //                val orders = ordersDao.getOrdersByUserId(userId) ?: return@get call.respond(HttpStatusCode.NotFound)
@@ -85,17 +87,33 @@ fun Route.orders(){
                 val orders = mutableListOf<OrderInfo>()
 
                 transaction {
-                    (OrdersTable innerJoin UsersTable).select(OrdersTable.orderName like "$orderName%").forEach {
-                        //val l = ImagesTable.select { ImagesTable.orderId eq it[OrdersTable.orderId] }.map{image -> image[ImagesTable.imageName] }
-                        val o = OrderInfo(
-                            id = it[OrdersTable.orderId],
-                            userName = it[UsersTable.username],
-                            orderName = it[OrdersTable.orderName],
-                            createdAt = it[OrdersTable.createdAt],
-                            images = emptyList()
-                        )
-                        orders.add(o)
+                    if (orderName.isBlank()){
+                        (OrdersTable innerJoin UsersTable).selectAll().forEach {
+                            //val l = ImagesTable.select { ImagesTable.orderId eq it[OrdersTable.orderId] }.map{image -> image[ImagesTable.imageName] }
+                            val o = OrderInfo(
+                                id = it[OrdersTable.orderId],
+                                userName = it[UsersTable.username],
+                                orderName = it[OrdersTable.orderName],
+                                createdAt = it[OrdersTable.createdAt],
+                                images = emptyList()
+                            )
+                            orders.add(o)
+                        }
                     }
+                    else {
+                        (OrdersTable innerJoin UsersTable).select(OrdersTable.orderName like "%$orderName%").forEach {
+                            //val l = ImagesTable.select { ImagesTable.orderId eq it[OrdersTable.orderId] }.map{image -> image[ImagesTable.imageName] }
+                            val o = OrderInfo(
+                                id = it[OrdersTable.orderId],
+                                userName = it[UsersTable.username],
+                                orderName = it[OrdersTable.orderName],
+                                createdAt = it[OrdersTable.createdAt],
+                                images = emptyList()
+                            )
+                            orders.add(o)
+                        }
+                    }
+
                 }
 
 
@@ -148,9 +166,41 @@ fun Route.orders(){
                 call.respond(HttpStatusCode.OK, orderInfo)
             }
 
+            get("name/{name}"){
+                val name = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
+
+                val order = transaction {
+                     (OrdersTable innerJoin UsersTable).select { OrdersTable.orderName eq name }
+                        .map{
+                            OrderInfo(
+                                id = it[OrdersTable.orderId],
+                                userName = it[UsersTable.username],
+                                orderName = it[OrdersTable.orderName],
+                                createdAt = it[OrdersTable.createdAt],
+                                images = emptyList()
+                            )
+                        }
+                        .singleOrNull()
+                }
+
+                order?.let{
+                    val listofImages = transaction {
+                        ImagesTable.select { ImagesTable.orderId eq order.id }
+                            .map {
+                                it[ImagesTable.imageName]
+                            }
+                    }
+                    call.respond(HttpStatusCode.OK, order.copy(images = listofImages))
+                } ?: call.respond(HttpStatusCode.NotFound, "Order with name $name not found")
+
+            }
+
             post("new") {
                 val request = kotlin.runCatching { call.receiveNullable<OrderRequest>() }.getOrNull()
                     ?: return@post call.respond(HttpStatusCode.BadRequest)
+
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.getClaim("userId", String::class)?.toInt()
 
                 if (request.orderName.isBlank()) return@post call.respond(HttpStatusCode.BadRequest)
 
@@ -158,15 +208,50 @@ fun Route.orders(){
                 val formatter = DateTimeFormatter.ofPattern("yyyy_MM_dd hh_mm_ss")
                 val date = current.format(formatter)
 
-                ordersDao.insertOrder(
-                    Order(
-                        userId = request.userId,
-                        orderName = request.orderName,
-                        createdAt = date
-                    )
-                ) ?: return@post call.respond(HttpStatusCode.Conflict)
+                val user = usersDao.getUserById(userId!!)
 
-                call.respond(HttpStatusCode.OK)
+                val order = Order(
+                    userId = userId,
+                    orderName = request.orderName,
+                    createdAt = date
+                )
+                println("Inserting order $order")
+
+                val insertedOrder = ordersDao.insertOrder(
+                    order
+                )
+
+                if (insertedOrder == null){
+                    val orderInfo = transaction {
+                        (OrdersTable innerJoin UsersTable).select { OrdersTable.orderName eq request.orderName }
+                            .map{
+                                OrderInfo(
+                                    id = it[OrdersTable.orderId],
+                                    userName = it[UsersTable.username],
+                                    orderName = it[OrdersTable.orderName],
+                                    createdAt = it[OrdersTable.createdAt],
+                                    images = emptyList()
+                                )
+                            }
+                            .singleOrNull()
+                    }
+                    call.respond(HttpStatusCode.OK, orderInfo!!)
+                }
+                else {
+                    val orderInfo = OrderInfo(
+                        id = insertedOrder.id,
+                        userName = user?.username ?: "null",
+                        orderName = insertedOrder.orderName,
+                        createdAt = insertedOrder.createdAt,
+                        images = emptyList()
+                    )
+
+                    call.respond(HttpStatusCode.OK, orderInfo)
+                }
+
+
+
+
             }
 
             post("delete/{id}") {
@@ -260,13 +345,15 @@ fun Route.orders(){
     route("orders"){
         get("image/{name}"){
             val imageName = call.parameters["name"] ?: return@get call.respond(HttpStatusCode.BadRequest)
-
+            println("Searching for image: $imageName")
             val image = imagesDao.getImageByName(imageName) ?: return@get call.respond(HttpStatusCode.NotFound)
             val file = File(image.uri)
             if (file.exists()){
+                println("File exists")
                 call.respondFile(file)
             }
             else{
+                println("File not exists")
                 call.respond(HttpStatusCode.NotFound, "Not exists")
             }
 

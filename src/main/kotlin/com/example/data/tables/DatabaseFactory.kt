@@ -9,7 +9,8 @@ import org.jetbrains.exposed.sql.transactions.transaction
 object DatabaseFactory {
     fun init(){
         val driverClassName = "com.mysql.cj.jdbc.Driver"
-        val jdbcUrl = "jdbc:mysql://172.16.1.54:3306/warehouse"
+        //val jdbcUrl = "jdbc:mysql://172.16.1.54:3306/warehouse"
+        val jdbcUrl = "jdbc:mysql://127.0.0.1:3306/warehouse"
         val user = "ServerUser"
         val password = "UserPassword22"
 
