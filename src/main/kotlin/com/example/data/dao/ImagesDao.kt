@@ -34,7 +34,7 @@ class ImagesDao: ImagesDaoFacade {
         val insertStatement = ImagesTable.insert {
             it[ImagesTable.imageName] = image.name
             it[ImagesTable.orderId] = image.orderId
-            it[ImagesTable.uri] = image.uri
+            it[ImagesTable.imagePath] = image.uri
         }
 
         insertStatement.resultedValues?.singleOrNull()?.let(::resultRowToImage)
@@ -48,6 +48,6 @@ class ImagesDao: ImagesDaoFacade {
         id = row[ImagesTable.imageId],
         orderId = row[ImagesTable.orderId],
         name = row[ImagesTable.imageName],
-        uri = row[ImagesTable.uri]
+        uri = row[ImagesTable.imagePath]
     )
 }

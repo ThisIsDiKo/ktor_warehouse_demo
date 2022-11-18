@@ -82,7 +82,7 @@ fun Route.users(
                 )
             )
 
-            call.respond(HttpStatusCode.OK, LoginResponse(token = token))
+            call.respond(HttpStatusCode.OK, LoginResponse(username = loginRequest.username, token = token))
         }
     }
 }

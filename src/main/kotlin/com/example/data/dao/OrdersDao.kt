@@ -5,6 +5,8 @@ import com.example.data.tables.OrdersTable
 import com.example.domain.daofacade.OrdersDaoFacade
 import com.example.domain.models.Order
 import org.jetbrains.exposed.sql.*
+import java.time.LocalDate
+import java.time.LocalDateTime
 
 val ordersDao: OrdersDaoFacade = OrdersDao()
 
@@ -37,7 +39,7 @@ class OrdersDao: OrdersDaoFacade {
         val insertStatement = OrdersTable.insert {
             it[OrdersTable.orderName] = order.orderName
             it[OrdersTable.userId] = order.userId
-            it[OrdersTable.createdAt] = order.createdAt
+            it[OrdersTable.createdAt] = LocalDateTime.now()
         }
 
         insertStatement.resultedValues?.singleOrNull()?.let(::resultRowToOrder)
@@ -51,6 +53,6 @@ class OrdersDao: OrdersDaoFacade {
         id = row[OrdersTable.orderId],
         userId = row[OrdersTable.userId],
         orderName = row[OrdersTable.orderName],
-        createdAt = row[OrdersTable.createdAt],
+        createdAt = row[OrdersTable.createdAt].toString(),
     )
 }
